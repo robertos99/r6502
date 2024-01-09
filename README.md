@@ -10,6 +10,6 @@ vasm6502_oldstyle
 
 download link: http://www.compilers.de/vasm.html
 
-- assemble with ```vasm6502_oldstyle -Fbin add.s```
+- assemble with ```vasm6502_oldstyle -Fbin -dotdir add.s```
 
-- inspect with ```hexadump -x a.o65```
+- inspect with ```hexdump -x a.o65```

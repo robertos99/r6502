@@ -13,9 +13,7 @@ impl Device {
         match self {
             Device::Ram(ram) => ram.read(addr),
             Device::Rom(rom) => rom.read(addr),
-            Device::Display(_) => {
-                panic!("Can't read from Display!")
-            }
+            Device::Display(_) => 0x00,
         }
     }
 

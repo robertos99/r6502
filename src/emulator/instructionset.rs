@@ -284,7 +284,6 @@ fn ADC(cpu: &mut Cpu, mem_mode: MemMode, bytes: u8) {
     let (to_add, _, _) = get_value(cpu, mem_mode);
 
     cpu.accumulator = cpu.accumulator + to_add;
-    cpu.accumulator = cpu.accumulator + to_add;
     if cpu.accumulator == 0 {
         cpu.status_flags |= ZERO_FLAG;
     }
@@ -340,7 +339,7 @@ fn BEQ(cpu: &mut Cpu) {
     let is_zero_set = (cpu.status_flags & ZERO_FLAG) != 0;
     if is_zero_set {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
-        cpu.programm_counter = cpu.programm_counter + rel as u16;
+        cpu.programm_counter = cpu.programm_counter + rel as u16 + 2;
     } else {
         cpu.programm_counter += 2;
     }
@@ -571,6 +570,8 @@ fn LDA(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
 
     if val == 0 {
         cpu.status_flags |= ZERO_FLAG;
+    } else {
+        cpu.status_flags &= !ZERO_FLAG;
     }
     cpu.programm_counter += bytes;
 }

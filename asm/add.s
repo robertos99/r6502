@@ -1,29 +1,37 @@
+    .org $0
+DIS_OUT .equ $200
+    .org $400
+
+main:
     LDA #$2 ; number 2
     ADC #$46 ; add 46 to get ascii H
     ; STA $F0
-    STA $200
+    STA DIS_OUT
     LDA #"e"
-    STA $200
+    STA DIS_OUT
     LDA #"l"
-    STA $200
+    STA DIS_OUT
     LDA #"l"
-    STA $200
+    STA DIS_OUT
     LDA #"o"
-    STA $200
+    STA DIS_OUT
     LDA #" "
-    STA $200
+    STA DIS_OUT
     LDA #"W"
-    STA $200
+    STA DIS_OUT
     LDA #"o"
-    STA $200
+    STA DIS_OUT
     LDA #"r"
-    STA $200
+    STA DIS_OUT
     LDA #"l"
-    STA $200
+    STA DIS_OUT
     LDA #"d"
-    STA $200
+    STA DIS_OUT
     LDA #"!"
-    STA $200
-n:
+    STA DIS_OUT
+do_nothing_loop:
     NOP
-    JMP n; later use nothing label
+    JMP do_nothing_loop; later use nothing label
+
+    .org $FFFC
+    .word main
