@@ -57,8 +57,8 @@ pub fn exec_ins(opt_code: u8, cpu: &mut Cpu) {
 
         0xF0 => BEQ(cpu),
 
-        0x24 => BIT(cpu, MemMode::ZPG),
-        0x2C => BIT(cpu, MemMode::ABS),
+        0x24 => BIT(cpu, MemMode::ZPG, 2),
+        0x2C => BIT(cpu, MemMode::ABS, 3),
 
         0x30 => BMI(cpu),
 
@@ -284,9 +284,7 @@ fn ADC(cpu: &mut Cpu, mem_mode: MemMode, bytes: u8) {
     let (to_add, _, _) = get_value(cpu, mem_mode);
 
     cpu.accumulator = cpu.accumulator + to_add;
-    if cpu.accumulator == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.accumulator == 0;
     cpu.programm_counter += bytes as u16;
 }
 
@@ -294,29 +292,26 @@ fn AND(cpu: &mut Cpu, mem_mode: MemMode, bytes: u8) {
     let (to_and, _, _) = get_value(cpu, mem_mode);
 
     cpu.accumulator = cpu.accumulator & to_and;
-    if cpu.accumulator == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.accumulator == 0;
+
     cpu.programm_counter += bytes as u16;
 }
 
 fn ASL(cpu: &mut Cpu, mem_mode: MemMode, bytes: u8) {
     let (val, addr, is_acc) = get_value(cpu, mem_mode);
     let val = (val as u16) << 1;
-    let overflows = val & 0b00010000 > 0;
+    cpu.status_flags.CARRY_FLAG = val & 0b00010000 > 0;
     if is_acc {
         cpu.accumulator = val as u8;
     } else {
         cpu.bus.write_to(addr, val as u8);
     }
-    if overflows {
-        cpu.status_flags |= CARRY_FLAG;
-    }
+
     cpu.programm_counter += bytes as u16;
 }
 
 fn BCC(cpu: &mut Cpu) {
-    let is_carry_clear = (cpu.status_flags & CARRY_FLAG) == 0;
+    let is_carry_clear = !cpu.status_flags.CARRY_FLAG;
     if is_carry_clear {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16;
@@ -326,7 +321,7 @@ fn BCC(cpu: &mut Cpu) {
 }
 
 fn BCS(cpu: &mut Cpu) {
-    let is_carry_set = (cpu.status_flags & CARRY_FLAG) != 0;
+    let is_carry_set = cpu.status_flags.CARRY_FLAG;
     if is_carry_set {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16;
@@ -336,7 +331,7 @@ fn BCS(cpu: &mut Cpu) {
 }
 
 fn BEQ(cpu: &mut Cpu) {
-    let is_zero_set = (cpu.status_flags & ZERO_FLAG) != 0;
+    let is_zero_set = cpu.status_flags.ZERO_FLAG;
     if is_zero_set {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16 + 2;
@@ -345,16 +340,16 @@ fn BEQ(cpu: &mut Cpu) {
     }
 }
 
-fn BIT(cpu: &mut Cpu, mem_mode: MemMode) {
+fn BIT(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
 
-    if val & 0b11111111 == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = val & 0b11111111 == 0;
+
+    cpu.programm_counter += bytes;
 }
 
 fn BMI(cpu: &mut Cpu) {
-    let is_negative_set = (cpu.status_flags & NEGATIVE_FLAG) != 0;
+    let is_negative_set = cpu.status_flags.NEGATIVE_FLAG;
     if is_negative_set {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16;
@@ -364,7 +359,7 @@ fn BMI(cpu: &mut Cpu) {
 }
 
 fn BNE(cpu: &mut Cpu) {
-    let is_zero_clear = (cpu.status_flags & ZERO_FLAG) == 0;
+    let is_zero_clear = !cpu.status_flags.ZERO_FLAG;
     if is_zero_clear {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16;
@@ -374,7 +369,7 @@ fn BNE(cpu: &mut Cpu) {
 }
 
 fn BPL(cpu: &mut Cpu) {
-    let is_negative_clear = (cpu.status_flags & NEGATIVE_FLAG) == 0;
+    let is_negative_clear = !cpu.status_flags.NEGATIVE_FLAG;
     if is_negative_clear {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16;
@@ -388,7 +383,7 @@ fn BRK(cpu: &mut Cpu) {
 }
 
 fn BVC(cpu: &mut Cpu) {
-    let is_overflow_clear = (cpu.status_flags & OVERFLOW_FLAG) == 0;
+    let is_overflow_clear = !cpu.status_flags.OVERFLOW_FLAG;
     if is_overflow_clear {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16;
@@ -398,7 +393,7 @@ fn BVC(cpu: &mut Cpu) {
 }
 
 fn BVS(cpu: &mut Cpu) {
-    let is_overflow_set = (cpu.status_flags & ZERO_FLAG) != 0;
+    let is_overflow_set = cpu.status_flags.OVERFLOW_FLAG;
     if is_overflow_set {
         let rel = cpu.bus.read_from(cpu.programm_counter + 1);
         cpu.programm_counter = cpu.programm_counter + rel as u16;
@@ -408,37 +403,31 @@ fn BVS(cpu: &mut Cpu) {
 }
 
 fn CLC(cpu: &mut Cpu) {
-    cpu.status_flags |= !CARRY_FLAG;
+    cpu.status_flags.CARRY_FLAG = false;
     cpu.programm_counter += 1;
 }
 
 fn CLD(cpu: &mut Cpu) {
-    cpu.status_flags |= !DECIMAL_MODE_FLAG;
+    cpu.status_flags.DECIMAL_MODE_FLAG = false;
     cpu.programm_counter += 1;
 }
 
 fn CLI(cpu: &mut Cpu) {
-    cpu.status_flags |= !INTERRUPT_DISABLE_FLAG;
+    cpu.status_flags.INTERRUPT_DISABLE_FLAG = false;
     cpu.programm_counter += 1;
 }
 
 fn CLV(cpu: &mut Cpu) {
-    cpu.status_flags |= !OVERFLOW_FLAG;
+    cpu.status_flags.OVERFLOW_FLAG = false;
     cpu.programm_counter += 1;
 }
 
 fn CMP(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
 
-    let is_a_equal_m = cpu.accumulator == val;
-    if is_a_equal_m {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.accumulator == val;
 
-    let is_a_bigger_or_equal = cpu.accumulator >= val;
-    if is_a_bigger_or_equal {
-        cpu.status_flags |= OVERFLOW_FLAG;
-    }
+    cpu.status_flags.OVERFLOW_FLAG = cpu.accumulator >= val;
 
     cpu.programm_counter += bytes;
 }
@@ -446,15 +435,9 @@ fn CMP(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
 fn CPX(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
 
-    let is_x_equal_m = cpu.x == val;
-    if is_x_equal_m {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.x == val;
 
-    let is_x_bigger_or_equal = cpu.x >= val;
-    if is_x_bigger_or_equal {
-        cpu.status_flags |= OVERFLOW_FLAG;
-    }
+    cpu.status_flags.OVERFLOW_FLAG = cpu.x >= val;
 
     cpu.programm_counter += bytes;
 }
@@ -462,15 +445,9 @@ fn CPX(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
 fn CPY(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
 
-    let is_y_equal_m = cpu.y == val;
-    if is_y_equal_m {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.y == val;
 
-    let is_y_bigger_or_equal = cpu.y >= val;
-    if is_y_bigger_or_equal {
-        cpu.status_flags |= OVERFLOW_FLAG;
-    }
+    cpu.status_flags.OVERFLOW_FLAG = cpu.y >= val;
 
     cpu.programm_counter += bytes;
 }
@@ -479,9 +456,7 @@ fn DEC(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, addr, _) = get_value(cpu, mem_mode);
 
     let val_dec = val - 1;
-    if val_dec == 0 {
-        cpu.status_flags |= ZERO_FLAG
-    }
+    cpu.status_flags.ZERO_FLAG = val_dec == 0;
     cpu.bus.write_to(addr, val_dec);
     cpu.programm_counter += bytes;
 }
@@ -489,18 +464,14 @@ fn DEC(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
 fn DEX(cpu: &mut Cpu) {
     cpu.x -= 1;
 
-    if cpu.x == 0 {
-        cpu.status_flags |= ZERO_FLAG
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.x == 0;
     cpu.programm_counter += 1;
 }
 
 fn DEY(cpu: &mut Cpu) {
     cpu.y -= 1;
 
-    if cpu.y == 0 {
-        cpu.status_flags |= ZERO_FLAG
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.y == 0;
     cpu.programm_counter += 1;
 }
 
@@ -508,9 +479,7 @@ fn EOR(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
     cpu.accumulator = cpu.accumulator ^ val;
 
-    if cpu.accumulator == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.accumulator == 0;
 
     cpu.programm_counter += bytes;
 }
@@ -519,9 +488,7 @@ fn INC(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, addr, _) = get_value(cpu, mem_mode);
     let val_inc = val + 1;
 
-    if val_inc == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = val_inc == 0;
 
     cpu.bus.write_to(addr, val_inc);
 
@@ -530,17 +497,13 @@ fn INC(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
 
 fn INX(cpu: &mut Cpu) {
     cpu.x += 1;
-    if cpu.x == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.x == 0;
     cpu.programm_counter += 1;
 }
 
 fn INY(cpu: &mut Cpu) {
     cpu.y += 1;
-    if cpu.y == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.y == 0;
     cpu.programm_counter += 1;
 }
 
@@ -568,11 +531,7 @@ fn LDA(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
     cpu.accumulator = val;
 
-    if val == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    } else {
-        cpu.status_flags &= !ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = val == 0;
     cpu.programm_counter += bytes;
 }
 
@@ -580,9 +539,7 @@ fn LDX(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
     cpu.x = val;
 
-    if val == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = val == 0;
     cpu.programm_counter += bytes;
 }
 
@@ -590,22 +547,16 @@ fn LDY(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
     cpu.y = val;
 
-    if val == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = val == 0;
     cpu.programm_counter += bytes;
 }
 
 fn LSR(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, addr, is_acc) = get_value(cpu, mem_mode);
-    let is_carry = val & 0b00000001 != 0;
-    if is_carry {
-        cpu.status_flags |= CARRY_FLAG;
-    }
+    cpu.status_flags.CARRY_FLAG = val & 0b00000001 != 0;
+
     let shifted_val = val >> 1;
-    if shifted_val == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = shifted_val == 0;
 
     if is_acc {
         cpu.accumulator = shifted_val;
@@ -623,9 +574,7 @@ fn NOP(cpu: &mut Cpu) {
 fn ORA(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
     cpu.accumulator = cpu.accumulator | val;
-    if val == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = val == 0;
     cpu.programm_counter += bytes;
 }
 
@@ -638,7 +587,17 @@ fn PHA(cpu: &mut Cpu) {
 
 fn PHP(cpu: &mut Cpu) {
     cpu.stack_pointer -= 1;
-    cpu.bus.write_to(cpu.stack_pointer as u16, cpu.status_flags);
+    let mut status_flags: u8 = 0;
+    status_flags |= (cpu.status_flags.CARRY_FLAG as u8) << 7;
+    status_flags |= (cpu.status_flags.ZERO_FLAG as u8) << 6;
+    status_flags |= (cpu.status_flags.INTERRUPT_DISABLE_FLAG as u8) << 5;
+    status_flags |= (cpu.status_flags.DECIMAL_MODE_FLAG as u8) << 4;
+    status_flags |= (cpu.status_flags.BREAK_COMMAND_FLAG as u8) << 3;
+    status_flags |= (cpu.status_flags.OVERFLOW_FLAG as u8) << 2;
+    status_flags |= (cpu.status_flags.NEGATIVE_FLAG as u8) << 1;
+    status_flags |= false as u8;
+
+    cpu.bus.write_to(cpu.stack_pointer as u16, status_flags);
 
     cpu.programm_counter += 1;
 }
@@ -650,20 +609,26 @@ fn PLA(cpu: &mut Cpu) {
 }
 
 fn PLP(cpu: &mut Cpu) {
-    cpu.status_flags = cpu.bus.read_from(cpu.stack_pointer as u16);
+    let status_flags = cpu.bus.read_from(cpu.stack_pointer as u16);
+
+    cpu.status_flags.CARRY_FLAG = ((status_flags >> 7) & 1) != 0;
+    cpu.status_flags.ZERO_FLAG = ((status_flags >> 6) & 1) != 0;
+    cpu.status_flags.INTERRUPT_DISABLE_FLAG = ((status_flags >> 5) & 1) != 0;
+    cpu.status_flags.DECIMAL_MODE_FLAG = ((status_flags >> 4) & 1) != 0;
+    cpu.status_flags.BREAK_COMMAND_FLAG = ((status_flags >> 3) & 1) != 0;
+    cpu.status_flags.OVERFLOW_FLAG = ((status_flags >> 2) & 1) != 0;
+    cpu.status_flags.NEGATIVE_FLAG = ((status_flags >> 1) & 1) != 0;
     cpu.stack_pointer += 1;
     cpu.programm_counter += 1;
 }
 
 fn ROL(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, addr, is_acc) = get_value(cpu, mem_mode);
-    let is_seven_set = val & 0b10000000 != 0;
-    let is_carry_set = cpu.status_flags & CARRY_FLAG != 0;
-    if is_seven_set {
-        cpu.status_flags |= CARRY_FLAG;
-    }
+    let was_carry_set = cpu.status_flags.CARRY_FLAG;
+    cpu.status_flags.CARRY_FLAG = val & 0b10000000 != 0;
+
     let mut val_shifted = val << 1;
-    if is_carry_set {
+    if was_carry_set {
         val_shifted += 1;
     }
 
@@ -678,13 +643,11 @@ fn ROL(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
 
 fn ROR(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, addr, is_acc) = get_value(cpu, mem_mode);
-    let is_zero_bit_set = val & 0b00000001 != 0;
-    let is_carry_set = cpu.status_flags & CARRY_FLAG != 0;
-    if is_zero_bit_set {
-        cpu.status_flags |= CARRY_FLAG;
-    }
+    let was_carry_set = cpu.status_flags.CARRY_FLAG;
+    cpu.status_flags.CARRY_FLAG = val & 0b00000001 != 0;
+
     let mut val_shifted = val >> 1;
-    if is_carry_set {
+    if was_carry_set {
         val_shifted |= 0b10000000;
     }
 
@@ -704,7 +667,13 @@ fn RTI(cpu: &mut Cpu) {
 
     cpu.stack_pointer += 3;
 
-    cpu.status_flags = status_flags;
+    cpu.status_flags.CARRY_FLAG = ((status_flags >> 7) & 1) != 0;
+    cpu.status_flags.ZERO_FLAG = ((status_flags >> 6) & 1) != 0;
+    cpu.status_flags.INTERRUPT_DISABLE_FLAG = ((status_flags >> 5) & 1) != 0;
+    cpu.status_flags.DECIMAL_MODE_FLAG = ((status_flags >> 4) & 1) != 0;
+    cpu.status_flags.BREAK_COMMAND_FLAG = ((status_flags >> 3) & 1) != 0;
+    cpu.status_flags.OVERFLOW_FLAG = ((status_flags >> 2) & 1) != 0;
+    cpu.status_flags.NEGATIVE_FLAG = ((status_flags >> 1) & 1) != 0;
     cpu.programm_counter = return_addr;
 }
 
@@ -721,25 +690,23 @@ fn SBC(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
     let (val, _, _) = get_value(cpu, mem_mode);
     cpu.accumulator -= val;
 
-    if cpu.accumulator == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.accumulator == 0;
 
     cpu.programm_counter += bytes;
 }
 
 fn SEC(cpu: &mut Cpu) {
-    cpu.status_flags |= CARRY_FLAG;
+    cpu.status_flags.CARRY_FLAG = true;
     cpu.programm_counter += 1;
 }
 
 fn SED(cpu: &mut Cpu) {
-    cpu.status_flags |= DECIMAL_MODE_FLAG;
+    cpu.status_flags.DECIMAL_MODE_FLAG = true;
     cpu.programm_counter += 1;
 }
 
 fn SEI(cpu: &mut Cpu) {
-    cpu.status_flags |= INTERRUPT_DISABLE_FLAG;
+    cpu.status_flags.INTERRUPT_DISABLE_FLAG = true;
     cpu.programm_counter += 1;
 }
 
@@ -769,49 +736,37 @@ fn STY(cpu: &mut Cpu, mem_mode: MemMode, bytes: u16) {
 
 fn TAX(cpu: &mut Cpu) {
     cpu.x = cpu.accumulator;
-    if cpu.x == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.x == 0;
     cpu.programm_counter += 1;
 }
 
 fn TAY(cpu: &mut Cpu) {
     cpu.y = cpu.accumulator;
-    if cpu.y == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.y == 0;
     cpu.programm_counter += 1;
 }
 
 fn TSX(cpu: &mut Cpu) {
     cpu.x = cpu.stack_pointer;
-    if cpu.x == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.x == 0;
     cpu.programm_counter += 1;
 }
 
 fn TXA(cpu: &mut Cpu) {
     cpu.accumulator = cpu.x;
-    if cpu.x == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.x == 0;
     cpu.programm_counter += 1;
 }
 
 fn TXS(cpu: &mut Cpu) {
     cpu.stack_pointer = cpu.x;
-    if cpu.x == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.x == 0;
     cpu.programm_counter += 1;
 }
 
 fn TYA(cpu: &mut Cpu) {
     cpu.accumulator = cpu.y;
-    if cpu.y == 0 {
-        cpu.status_flags |= ZERO_FLAG;
-    }
+    cpu.status_flags.ZERO_FLAG = cpu.y == 0;
     cpu.programm_counter += 1;
 }
 

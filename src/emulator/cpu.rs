@@ -1,13 +1,24 @@
 use crate::emulator::bus::Bus;
 use crate::emulator::instructionset;
 
+#[allow(non_snake_case)]
+pub struct StatusFlag {
+    pub CARRY_FLAG: bool,
+    pub ZERO_FLAG: bool,
+    pub INTERRUPT_DISABLE_FLAG: bool,
+    pub DECIMAL_MODE_FLAG: bool,
+    pub BREAK_COMMAND_FLAG: bool,
+    pub OVERFLOW_FLAG: bool,
+    pub NEGATIVE_FLAG: bool,
+}
+
 pub struct Cpu {
     pub programm_counter: u16,
     pub stack_pointer: u8,
     pub accumulator: u8,
     pub x: u8,
     pub y: u8,
-    pub status_flags: u8,
+    pub status_flags: StatusFlag,
 
     pub bus: Bus,
 }
@@ -22,7 +33,15 @@ impl Cpu {
             accumulator: 0,
             x: 0,
             y: 0,
-            status_flags: 0b00000000,
+            status_flags: StatusFlag {
+                CARRY_FLAG: false,
+                ZERO_FLAG: false,
+                INTERRUPT_DISABLE_FLAG: false,
+                DECIMAL_MODE_FLAG: false,
+                BREAK_COMMAND_FLAG: false,
+                OVERFLOW_FLAG: false,
+                NEGATIVE_FLAG: false,
+            },
 
             bus,
         }
